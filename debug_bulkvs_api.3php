@@ -1,0 +1,151 @@
+<?php
+// debug_bulkvs_api.php - Test script to debug BulkVS API issues
+require_once 'config/database.php';
+require_once 'classes/ApiSettings.php';
+
+$database = new Database();
+$db = $database->getConnection();
+$api_settings = new ApiSettings($db);
+$settings = $api_settings->get();
+
+if (!$settings) {
+    die("No API settings found. Please configure API settings first.");
+}
+
+$api_username = $settings['api_username'];
+$api_password = $settings['api_password'];
+
+// Test 1: Check API credentials
+echo "<h2>Test 1: API Credentials Test</h2>";
+$credentials = base64_encode($api_username . ':' . $api_password);
+
+$curl = curl_init();
+curl_setopt_array($curl, [
+    CURLOPT_URL => "https://portal.bulkvs.com/api/v1.0/balance",
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Basic ' . $credentials
+    ],
+    CURLOPT_TIMEOUT => 30
+]);
+
+$response = curl_exec($curl);
+$httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+$curlError = curl_error($curl);
+curl_close($curl);
+
+echo "HTTP Code: $httpCode<br>";
+echo "Response: $response<br>";
+if ($curlError) echo "CURL Error: $curlError<br>";
+
+// Test 2: Send a test message
+echo "<h2>Test 2: Send Test Message</h2>";
+
+// CHANGE THESE VALUES FOR YOUR TEST
+$test_from = "18324786722"; // Your BulkVS phone number
+$test_to = "12816154820";   // Your mobile number for testing
+$test_message = "Test message from BulkVS API - " . date('Y-m-d H:i:s');
+
+echo "From: $test_from<br>";
+echo "To: $test_to<br>";
+echo "Message: $test_message<br><br>";
+
+// Clean phone numbers
+$to_number = preg_replace('/\D/', '', $test_to);
+$from_number = preg_replace('/\D/', '', $test_from);
+
+// Add country code if needed
+if (strlen($to_number) == 10) {
+    $to_number = '1' . $to_number;
+}
+if (strlen($from_number) == 10) {
+    $from_number = '1' . $from_number;
+}
+
+echo "Cleaned From: $from_number<br>";
+echo "Cleaned To: $to_number<br><br>";
+
+$data = [
+    'to' => [$to_number],
+    'from' => $from_number,
+    'message' => $test_message,
+    'method' => 'post'
+];
+
+echo "JSON Data: " . json_encode($data, JSON_PRETTY_PRINT) . "<br><br>";
+
+$curl = curl_init();
+curl_setopt_array($curl, [
+    CURLOPT_URL => "https://portal.bulkvs.com/api/v1.0/messageSend",
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_POSTFIELDS => json_encode($data),
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Basic ' . $credentials
+    ],
+    CURLOPT_TIMEOUT => 30,
+    CURLOPT_VERBOSE => true
+]);
+
+$response = curl_exec($curl);
+$httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+$curlError = curl_error($curl);
+$curlInfo = curl_getinfo($curl);
+curl_close($curl);
+
+echo "<strong>Send Message Results:</strong><br>";
+echo "HTTP Code: $httpCode<br>";
+echo "Response: <pre>$response</pre><br>";
+if ($curlError) echo "CURL Error: $curlError<br>";
+
+echo "<h3>Full CURL Info:</h3>";
+echo "<pre>" . print_r($curlInfo, true) . "</pre>";
+
+// Test 3: Try alternative API formats
+echo "<h2>Test 3: Alternative API Format</h2>";
+
+$data_alt = [
+    'to' => $to_number,  // Single string instead of array
+    'from' => $from_number,
+    'message' => $test_message
+];
+
+echo "Alternative JSON Data: " . json_encode($data_alt, JSON_PRETTY_PRINT) . "<br><br>";
+
+$curl = curl_init();
+curl_setopt_array($curl, [
+    CURLOPT_URL => "https://portal.bulkvs.com/api/v1.0/messageSend",
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_POSTFIELDS => json_encode($data_alt),
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Basic ' . $credentials
+    ],
+    CURLOPT_TIMEOUT => 30
+]);
+
+$response = curl_exec($curl);
+$httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+$curlError = curl_error($curl);
+curl_close($curl);
+
+echo "<strong>Alternative Format Results:</strong><br>";
+echo "HTTP Code: $httpCode<br>";
+echo "Response: <pre>$response</pre><br>";
+if ($curlError) echo "CURL Error: $curlError<br>";
+
+// Test 4: Check if your phone numbers are properly configured
+echo "<h2>Test 4: Database Phone Numbers</h2>";
+$phone_query = "SELECT * FROM phone_numbers WHERE is_active = 1";
+$phone_stmt = $db->prepare($phone_query);
+$phone_stmt->execute();
+$phone_numbers = $phone_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+echo "<strong>Configured Phone Numbers:</strong><br>";
+foreach ($phone_numbers as $phone) {
+    echo "ID: {$phone['id']}, Number: {$phone['number']}, Name: {$phone['friendly_name']}<br>";
+}
+?>
