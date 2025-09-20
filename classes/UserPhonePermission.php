@@ -1,5 +1,5 @@
 <?php
-*// classes/UserPhonePermission.php
+// classes/UserPhonePermission.php
 class UserPhonePermission {
     private $conn;
     private $table_name = "user_phone_permissions";
